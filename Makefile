@@ -1,5 +1,5 @@
 obj-m := mydevice.o
-mydevice-objs := main.o 
+mydevice-objs := main.o esp32_pm_i2c.o 
 
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD  := $(shell pwd)

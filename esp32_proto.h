@@ -11,7 +11,7 @@ typedef enum power_state{
 	P_STATE_ACTIVE = 0,
 	P_STATE_LIGHT_SLEEP,
 	P_STATE_DEEP_SLEEP,
-};
+}p_state_t;
 
 /* I2C protocol: cmd(msg) + 1 byte data
  * DEV_GET_POWER_MODE: no further data required 
