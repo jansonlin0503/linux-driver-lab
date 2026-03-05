@@ -5,35 +5,101 @@
 
 #include "device.h"
 
+static struct class *class;
 /* Sensor registration steps */
 
 /* Probe and remove functions */
 static int dev_probe(struct i2c_client *client)
 {
     struct my_device *my_dev;
+    int ret;
 
-    /* Device dynamic allocation */
     my_dev = kzalloc(sizeof(*my_dev), GFP_KERNEL);
     if (!my_dev)
         return -ENOMEM;
 
-    /* Binding I2C client */
     my_dev->client = client;
     i2c_set_clientdata(client, my_dev);
 
-    /* Device resource initialization */
     mutex_init(&my_dev->i2c_lock);
 
-    pr_info("I2C Sensor: Sensor registered \n");
+    /* Allocate char device number */
+    ret = alloc_chrdev_region(&my_dev->devt, 0, 1, DEVICE_NAME);
+    if (ret) {
+        pr_err("I2C Sensor: char device registration failed\n");
+        goto err_alloc_chrdev;
+    }
+
+    /* Initialize cdev */
+    cdev_init(&my_dev->cdev, &my_fops);
+
+    ret = cdev_add(&my_dev->cdev, my_dev->devt, 1);
+    if (ret) {
+        pr_err("I2C Sensor: cdev add failed\n");
+        goto err_cdev_add;
+    }
+
+    /* Create device class */
+    class = class_create(DEVICE_NAME);
+    if (IS_ERR(class)) {
+        ret = PTR_ERR(class);
+        goto err_class_create;
+    }
+
+    /* Create /dev node */
+    my_dev->device = device_create(class, NULL,
+                                   my_dev->devt, NULL,
+                                   DEVICE_NAME);
+    if (IS_ERR(my_dev->device)) {
+        ret = PTR_ERR(my_dev->device);
+        goto err_device_create;
+    }
+
+    /* Initialize FIFO */
+    ret = kfifo_alloc(&my_dev->fifo, FIFO_SIZE, GFP_KERNEL);
+    if (ret)
+        goto err_fifo;
+
+    mutex_init(&my_dev->fifo_lock);
+    init_waitqueue_head(&my_dev->wq);
+    my_dev->open_count = 0;
+
+    pr_info("I2C Sensor: Sensor registered\n");
     return 0;
+
+err_fifo:
+    device_destroy(class, my_dev->devt);
+
+err_device_create:
+    class_destroy(class);
+
+err_class_create:
+    cdev_del(&my_dev->cdev);
+
+err_cdev_add:
+    unregister_chrdev_region(my_dev->devt, 1);
+
+err_alloc_chrdev:
+    kfree(my_dev);
+
+    return ret;
 }
 
 static void dev_remove(struct i2c_client *client)
 {
-    struct my_dev *dev = i2c_get_clientdata(client);
+    struct my_device *dev = i2c_get_clientdata(client);
+
+    kfifo_free(&dev->fifo);
+
+    device_destroy(class, dev->devt);
+    class_destroy(class);
+
+    cdev_del(&dev->cdev);
+    unregister_chrdev_region(dev->devt, 1);
 
     kfree(dev);
-    pr_info("I2C Sensor: Sensor removed \n");
+
+    pr_info("I2C Sensor: Sensor removed\n");
 }
 
 static const struct i2c_device_id my_device_id[] = {
