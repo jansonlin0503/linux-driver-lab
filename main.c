@@ -2,6 +2,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/pm_runtime.h>
 
 #include "device.h"
 
@@ -64,6 +65,14 @@ static int dev_probe(struct i2c_client *client)
     init_waitqueue_head(&my_dev->wq);
     my_dev->open_count = 0;
 
+    my_dev->p_state = ret;
+    dev_info(&client->dev, "I2C Sensor: Initial power state: %d\n", my_dev->p_state);
+
+    /* Set up runtime pm */
+    pm_runtime_enable(&client->dev);
+    pm_runtime_set_autosuspend_delay(&client->dev, 3000);
+    pm_runtime_use_autosuspend(&client->dev);
+
     pr_info("I2C Sensor: Sensor registered\n");
     return 0;
 
@@ -89,6 +98,9 @@ static void dev_remove(struct i2c_client *client)
 {
     struct my_device *dev = i2c_get_clientdata(client);
 
+    /* Disable runtime PM */
+    pm_runtime_disable(&client->dev);
+
     kfifo_free(&dev->fifo);
 
     device_destroy(class, dev->devt);
@@ -112,6 +124,7 @@ static struct i2c_driver my_device_driver = {
     .driver =
         {
             .name = "esp32-sensor",
+	    .pm = &my_pm_ops,
         },
     .probe = dev_probe,
     .remove = dev_remove,

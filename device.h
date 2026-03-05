@@ -37,4 +37,8 @@ struct my_device {
 
 extern const struct file_operations my_fops;
 int power_state_get(struct i2c_client *client);
+
+/* PM callback */
+extern const struct dev_pm_ops my_pm_ops;
+
 #endif

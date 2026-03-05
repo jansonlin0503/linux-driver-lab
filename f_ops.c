@@ -1,4 +1,5 @@
 #include <linux/fs.h>
+#include <linux/pm_runtime.h>
 
 #include "device.h"
 
