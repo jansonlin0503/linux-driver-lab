@@ -23,7 +23,7 @@ static int power_state_set(struct i2c_client *client, uint8_t mode)
 	return 0;
 }
 
-static int power_state_get(struct i2c_client *client)
+int power_state_get(struct i2c_client *client)
 {
     struct my_device *dev;
     struct i2c_msg msg[2];
