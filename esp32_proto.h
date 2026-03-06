@@ -26,7 +26,7 @@ enum device_cmd {
 
 enum device_msg {
 	DEV_POWER_MODE_MSG = 0x11,
-}
+};
 
 #endif
 
