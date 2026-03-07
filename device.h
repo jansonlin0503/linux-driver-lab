@@ -6,6 +6,8 @@
 #include <linux/kfifo.h>
 #include <linux/cdev.h>
 #include <linux/wait.h>
+#include <linux/gpio.h>
+#include <linux/interrupt.h>
 
 #include "device.h"
 #include "esp32_proto.h"
@@ -20,6 +22,9 @@ struct my_device {
 
         /* cached power state */
         p_state_t p_state;
+
+	/* IRQ */
+	int irq;
 
         /* char device interface */
         struct cdev cdev;
@@ -40,5 +45,8 @@ int power_state_get(struct i2c_client *client);
 
 /* PM callback */
 extern const struct dev_pm_ops my_pm_ops;
+
+/* IRQ registration */
+int irq_init(struct my_device *dev);
 
 #endif

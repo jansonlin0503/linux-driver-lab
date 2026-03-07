@@ -61,12 +61,16 @@ static int dev_probe(struct i2c_client *client)
     if (ret)
         goto err_fifo;
 
+    ret = irq_init(my_dev);
+    if(ret){
+	    goto err_irq;
+    }
+
     mutex_init(&my_dev->fifo_lock);
     init_waitqueue_head(&my_dev->wq);
     my_dev->open_count = 0;
 
-    my_dev->p_state = ret;
-    dev_info(&client->dev, "I2C Sensor: Initial power state: %d\n", my_dev->p_state);
+    atomic_set(&my_dev->p_state, P_STATE_ACTIVE);
 
     /* Set up runtime pm */
     pm_runtime_enable(&client->dev);
@@ -76,6 +80,7 @@ static int dev_probe(struct i2c_client *client)
     pr_info("I2C Sensor: Sensor registered\n");
     return 0;
 
+err_irq:
 err_fifo:
     device_destroy(class, my_dev->devt);
 
