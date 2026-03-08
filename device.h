@@ -15,6 +15,14 @@
 #define DEVICE_NAME "tao"
 #define FIFO_SIZE 128
 
+#define LIGHT_SLEEP_US 2000000
+#define DEEP_SLEEP_US 10000000
+
+struct pm_policy{
+	uint32_t light_sleep_us;
+	uint32_t deep_sleep_us;
+};
+
 struct my_device {
         /* I2C device */
         struct i2c_client *client;
@@ -22,9 +30,11 @@ struct my_device {
 
         /* cached power state */
         atomic_t p_state;
+	struct pm_policy pm_policy;
 
 	/* IRQ */
 	int irq;
+	struct work_struct irq_sync_work;
 
         /* char device interface */
         struct cdev cdev;
@@ -49,5 +59,8 @@ extern const struct dev_pm_ops my_pm_ops;
 
 /* IRQ registration */
 int irq_init(struct my_device *dev);
+
+/* Defered work */
+int work_init(struct my_device *dev);
 
 #endif

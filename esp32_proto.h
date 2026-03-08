@@ -21,8 +21,8 @@ typedef enum power_state{
  * DEV_POWER_MODE: power mode message */
 
 enum device_cmd {
-	DEV_GET_POWER_MODE = 0x01,
-	DEV_SET_POWER_MODE = 0x02,
+	DEV_WAKE= 0x01,
+	DEV_SLEEP = 0x02,
 
 	DEV_PREPARE_SLEEP = 0x03,
 };

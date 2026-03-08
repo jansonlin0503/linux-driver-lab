@@ -72,7 +72,13 @@ static int dev_probe(struct i2c_client *client)
 
     atomic_set(&my_dev->p_state, P_STATE_ACTIVE);
 
+    /* Set up work */
+    work_init(my_dev);
+
     /* Set up runtime pm */
+    my_dev->pm_policy.light_sleep_us = LIGHT_SLEEP_US;
+    my_dev->pm_policy.deep_sleep_us  = DEEP_SLEEP_US;
+
     pm_runtime_enable(&client->dev);
     pm_runtime_set_autosuspend_delay(&client->dev, 3000);
     pm_runtime_use_autosuspend(&client->dev);
@@ -105,6 +111,9 @@ static void dev_remove(struct i2c_client *client)
 
     /* Disable runtime PM */
     pm_runtime_disable(&client->dev);
+
+    /* Cancel work */
+    cancel_work_sync(&dev->irq_sync_work);
 
     kfifo_free(&dev->fifo);
 

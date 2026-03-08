@@ -7,7 +7,12 @@
 /* IRQ handler */
 static irqreturn_t esp32_irq_handler(int irq, void *data)
 {
-    pr_info("IRQ_TRIGGERED !\n");
+    struct my_device *dev = data;
+
+    pr_info("IRQ_TRIGGERED!\n");
+
+    schedule_work(&dev->irq_sync_work);
+
     return IRQ_HANDLED;
 }
 

@@ -25,7 +25,7 @@ int power_state_get(struct i2c_client *client)
 {
     struct my_device *dev;
     struct i2c_msg msg[2];
-    uint8_t cmd = DEV_GET_POWER_MODE;
+    uint8_t cmd = DEV_WAKE;
     uint8_t state[2];
     int ret;
 
