@@ -53,6 +53,21 @@ static void i2c_slave_init(void)
     ESP_LOGI(TAG, "I2C Slave ready at address 0x%02X", I2C_SLAVE_ADDR);
 }
 
+void irq_gpio_init(void)
+{
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << ESP32_GPIO_OUT),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+
+    gpio_config(&io_conf);
+
+    gpio_set_level(ESP32_GPIO_OUT, 0);   // default low
+}
+
 /* =========================
  * Sleep handler
  * =========================
@@ -133,6 +148,34 @@ static int i2c_handler(uint8_t *rx_buf, int len)
         break;
     }
 
+    case DEV_PREPARE_SLEEP: {
+			     
+	uint8_t state;
+
+	ESP_LOGI(TAG, "CMD: Prepare to sleep");
+	device_state = P_STATE_PREPARE_SLEEP;
+	state = device_state;
+
+	/* Reset Tx buffer */
+	i2c_reset_tx_fifo(I2C_SLAVE_NUM);
+
+	/* Write prepare state into buffer */
+	i2c_slave_write_buffer(
+		I2C_SLAVE_NUM,
+		&state,
+		1,
+		portMAX_DELAY
+	);
+
+	/* Pull up GPIO and wait */
+	gpio_set_level(ESP32_GPIO_OUT, 1);
+	esp_rom_delay_us(50);
+	gpio_set_level(ESP32_GPIO_OUT,0);
+	ESP_LOGI(TAG, "GPIO out pull up");
+
+	break;
+    }
+
 
     default:
 
@@ -148,6 +191,7 @@ void app_main(void)
     uint8_t rx_buf[8];
     i2c_slave_init();
     ESP_LOGI(TAG, "ESP32 sensor started");
+    irq_gpio_init();
 
     while (1) {
 
@@ -159,7 +203,6 @@ void app_main(void)
         );
 
         if (len > 0) {
-
             ESP_LOGI(TAG, "I2C RX len=%d", len);
 
             i2c_handler(rx_buf, len);
