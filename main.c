@@ -61,10 +61,13 @@ static int dev_probe(struct i2c_client *client)
     if (ret)
         goto err_fifo;
 
+    /* Init IRQ */
     ret = irq_init(my_dev);
     if(ret){
 	    goto err_irq;
     }
+    /* Init GPIO */
+    gpio_direction_output(HOST_GPIO_OUT, 0);
 
     mutex_init(&my_dev->fifo_lock);
     init_waitqueue_head(&my_dev->wq);

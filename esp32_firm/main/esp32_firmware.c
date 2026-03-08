@@ -1,10 +1,11 @@
 #include "esp32_proto.h"
-
+#include "esp_sleep.h"
 #include <stdio.h>
 #include "driver/i2c.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "driver/uart.h"
 
 static p_state_t device_state = P_STATE_ACTIVE;
 static uint8_t state_buf[2] = {DEV_POWER_MODE_MSG, P_STATE_ACTIVE};
@@ -20,6 +21,16 @@ static uint8_t state_buf[2] = {DEV_POWER_MODE_MSG, P_STATE_ACTIVE};
 
 #define I2C_SLAVE_RX_BUF_LEN 128
 #define I2C_SLAVE_TX_BUF_LEN 128
+
+typedef struct {
+    uint32_t light_sleep_us;
+    uint32_t deep_sleep_us;
+} pm_policy_t;
+
+static pm_policy_t pm_policy = {
+    .light_sleep_us = 2000000,
+    .deep_sleep_us = 10000000
+};
 
 static void i2c_slave_init(void)
 {
@@ -68,44 +79,59 @@ void irq_gpio_init(void)
     gpio_set_level(ESP32_GPIO_OUT, 0);   // default low
 }
 
-/* =========================
- * Sleep handler
- * =========================
- */
-
-
-static int sleep_handler(p_state_t state)
+#define WAKE_LEVEL 1
+static esp_err_t esp32_register_gpio_wakeup(void)
 {
-    switch (state) {
+    gpio_config_t config = {
+        .pin_bit_mask = 1ULL << ESP32_GPIO_IN,
+        .mode = GPIO_MODE_INPUT,
+        .pull_down_en = false,
+        .pull_up_en = false,
+        .intr_type = GPIO_INTR_DISABLE
+    };
 
-    case P_STATE_ACTIVE:
-        ESP_LOGI(TAG, "Entering ACTIVE mode");
-        break;
+    ESP_ERROR_CHECK(gpio_config(&config));
 
-    case P_STATE_LIGHT_SLEEP:
-        ESP_LOGI(TAG, "Entering LIGHT SLEEP");
-        /* TODO: call esp_light_sleep_start() */
-        break;
+    ESP_ERROR_CHECK(
+        gpio_wakeup_enable(
+            ESP32_GPIO_IN,
+            WAKE_LEVEL ? GPIO_INTR_HIGH_LEVEL : GPIO_INTR_LOW_LEVEL
+        )
+    );
 
-    case P_STATE_DEEP_SLEEP:
-        ESP_LOGI(TAG, "Entering DEEP SLEEP");
-        /* TODO: call esp_deep_sleep_start() */
-        break;
+    ESP_ERROR_CHECK(esp_sleep_enable_gpio_wakeup());
 
-    default:
-        ESP_LOGW(TAG, "Unknown power state");
-        return -1;
-    }
+    ESP_LOGI("PM", "GPIO wakeup source registered");
 
-    device_state = state;
-    return 0;
+    return ESP_OK;
 }
-
 
 /* =========================
  * I2C command handler
  * =========================
  */
+
+static int resume_process(void)
+{
+	uint8_t state;
+	device_state = P_STATE_ACTIVE;
+	state = device_state;
+
+	i2c_reset_tx_fifo(I2C_SLAVE_NUM);
+
+	i2c_slave_write_buffer(
+		I2C_SLAVE_NUM,
+		&state,
+		1,
+		portMAX_DELAY
+	);
+
+	gpio_set_level(ESP32_GPIO_OUT, 1);
+	esp_rom_delay_us(50);
+	gpio_set_level(ESP32_GPIO_OUT,0);
+
+	return 0;
+}
 
 static int i2c_handler(uint8_t *rx_buf, int len)
 {
@@ -113,41 +139,36 @@ static int i2c_handler(uint8_t *rx_buf, int len)
 
     switch (cmd) {
 
-    case DEV_GET_POWER_MODE: {
+    case DEV_WAKE: {
 
-	int written;
-        /* prepare response */
-	state_buf[1] = device_state;
-        written = i2c_slave_write_buffer(
-            I2C_SLAVE_NUM,
-            state_buf,
-            2,
-	    portMAX_DELAY
-        );
-
-	if(written != 2)
-		ESP_LOGI(TAG, "I2C: Power state sent failed!");
-
-        ESP_LOGI(TAG, "I2C: Power state %d sent", state_buf[1]);
+        ESP_LOGI(TAG, "CMD: WAKE");
 
         break;
     }
 
 
-    case DEV_SET_POWER_MODE: {
+    case DEV_SLEEP: {
 
-        ESP_LOGI(TAG, "CMD: SET_POWER_MODE");
+        ESP_LOGI(TAG, "CMD: SLEEP");
+	uart_wait_tx_idle_polling(CONFIG_ESP_CONSOLE_UART_NUM);
+	
+	/* Idle timer for deep sleep mode */
+	esp_sleep_enable_timer_wakeup(pm_policy.deep_sleep_us);
 
-        if (len < 2)
-            return -1;
+	esp_light_sleep_start();
 
-        p_state_t state = rx_buf[1];
+	if(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER){
+		ESP_LOGI(TAG, "Enter deep sleep");
+		return 0;
+	}
 
-        sleep_handler(state);
+	ESP_LOGI(TAG, "Waked up by host GPIO");
+	resume_process();
+	
+	break;
 
-        break;
+
     }
-
     case DEV_PREPARE_SLEEP: {
 			     
 	uint8_t state;
@@ -176,7 +197,6 @@ static int i2c_handler(uint8_t *rx_buf, int len)
 	break;
     }
 
-
     default:
 
         ESP_LOGW(TAG, "Unknown CMD: 0x%02x", cmd);
@@ -192,6 +212,8 @@ void app_main(void)
     i2c_slave_init();
     ESP_LOGI(TAG, "ESP32 sensor started");
     irq_gpio_init();
+    gpio_wakeup_enable(ESP32_GPIO_IN, GPIO_INTR_HIGH_LEVEL);
+    esp32_register_gpio_wakeup();
 
     while (1) {
 
