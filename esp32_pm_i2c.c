@@ -3,20 +3,18 @@
 #include "device.h"
 #include "esp32_proto.h"
 
-static int power_state_set(struct i2c_client *client, uint8_t mode)
+int prepare_sleep (struct i2c_client *client)
 {
 	struct my_device *dev = i2c_get_clientdata(client);
-	uint8_t buf[2];
+	uint8_t buf;
        	int ret;
 
-	buf[0] = DEV_SET_POWER_MODE;
-	buf[1] = mode;
+	buf = DEV_PREPARE_SLEEP;
 
 	mutex_lock(&dev->i2c_lock);
-	ret = i2c_master_send(client, buf, sizeof(buf));
+	ret = i2c_master_send(client, &buf, sizeof(buf));
 	if(ret < 0){
-		pr_err("I2C Sensor: Power set failed !\n");
-		return ret;
+		pr_err("I2C Sensor: Preparing sleep fail !\n");
 	}
 	mutex_unlock(&dev->i2c_lock);
 

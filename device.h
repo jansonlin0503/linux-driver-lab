@@ -21,7 +21,7 @@ struct my_device {
         struct mutex i2c_lock;
 
         /* cached power state */
-        p_state_t p_state;
+        atomic_t p_state;
 
 	/* IRQ */
 	int irq;
@@ -42,6 +42,7 @@ struct my_device {
 
 extern const struct file_operations my_fops;
 int power_state_get(struct i2c_client *client);
+int prepare_sleep(struct i2c_client *client);
 
 /* PM callback */
 extern const struct dev_pm_ops my_pm_ops;

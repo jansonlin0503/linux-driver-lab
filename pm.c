@@ -7,7 +7,9 @@ static int my_runtime_suspend(struct device *dev)
 
     pr_info("sensor runtime suspend\n");
 
-    /* tell ESP32 to sleep */
+    prepare_sleep(client);
+    atomic_set(&mdev->p_state, P_STATE_PREPARE_SLEEP);
+
     return 0;
 }
 

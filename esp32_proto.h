@@ -9,6 +9,7 @@
 
 typedef enum power_state{
 	P_STATE_ACTIVE = 0,
+	P_STATE_PREPARE_SLEEP,
 	P_STATE_LIGHT_SLEEP,
 	P_STATE_DEEP_SLEEP,
 }p_state_t;
@@ -22,6 +23,8 @@ typedef enum power_state{
 enum device_cmd {
 	DEV_GET_POWER_MODE = 0x01,
 	DEV_SET_POWER_MODE = 0x02,
+
+	DEV_PREPARE_SLEEP = 0x03,
 };
 
 enum device_msg {
